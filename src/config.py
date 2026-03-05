@@ -62,9 +62,9 @@ class DualModeConfig:
     diffusion_max_tokens: int = 512
 
     # Mode switching tags
-    # Format: prompt<thinking>reasoning</thinking>output (output directly after end tag)
-    # The Nemotron dataset already contains <thinking> tags in assistant messages
-    reasoning_start_tag: str = "<thinking>"
-    reasoning_end_tag: str = "</thinking>"
-    output_start_tag: str = ""  # Not used - output comes after </thinking>
+    # Format: prompt</think> reasoning </think> <output> output </output>
+    # The Nemotron dataset uses <think>/</think> tags in assistant messages
+    reasoning_start_tag: str = "<think>"
+    reasoning_end_tag: str = "</think>"
+    output_start_tag: str = ""  # Not used - output comes after </think>
     output_end_tag: str = ""  # Not used

@@ -253,12 +253,25 @@ class DualModeGenerationModel(nn.Module):
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.reasoning_start_id = self.tokenizer.encode(
-            self.config.reasoning_start_tag, add_special_tokens=False
-        )[0] if self.config.reasoning_start_tag else None
-        self.reasoning_end_id = self.tokenizer.encode(
-            self.config.reasoning_end_tag, add_special_tokens=False
-        )[0] if self.config.reasoning_end_tag else None
+        
+        # Store full token sequences for multi-token tags
+        if self.config.reasoning_start_tag:
+            self.reasoning_start_ids = self.tokenizer.encode(
+                self.config.reasoning_start_tag, add_special_tokens=False
+            )
+        else:
+            self.reasoning_start_ids = []
+        
+        if self.config.reasoning_end_tag:
+            self.reasoning_end_ids = self.tokenizer.encode(
+                self.config.reasoning_end_tag, add_special_tokens=False
+            )
+        else:
+            self.reasoning_end_ids = []
+        
+        # For backward compatibility
+        self.reasoning_start_id = self.reasoning_start_ids[0] if self.reasoning_start_ids else None
+        self.reasoning_end_id = self.reasoning_end_ids[0] if self.reasoning_end_ids else None
         self.output_start_id = self.tokenizer.encode(
             self.config.output_start_tag, add_special_tokens=False
         )[0] if self.config.output_start_tag else None

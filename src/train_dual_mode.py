@@ -88,16 +88,14 @@ class DualModeDataset(Dataset):
         item = self.data[idx]
 
         # Format the full sequence
-        # Format: prompt  reasoning </think> <output> output </output>
+        # Format: prompt  reasoning </think> output
         prompt = item.get("prompt", "")
         reasoning = item.get("reasoning", "")
         output = item.get("output", "")
 
         # Construct full text with tags
-        # The reasoning field already contains <thinking> tags from the original dataset
-        # Format: prompt + assistant_response (which has <thinking> tags)
-        reasoning = item.get("reasoning", "")
-        full_text = f"{prompt}{reasoning}"
+        # Add <think> and </think> tags around reasoning content
+        full_text = f"{prompt}<think>{reasoning}</think>{output}"
 
         # Tokenize
         encodings = self.tokenizer(
@@ -236,24 +234,33 @@ class DualModeTrainer:
         Compute diffusion-style masked token prediction loss
 
         This uses BERT/T5-style masked language modeling.
-        Format: prompt<reasoning>reasoning</reasoning>output
-        Output is everything after </reasoning> tag until sequence end.
+        Format: prompt</think> reasoning </think> output
+        Output is everything after </think> tag until sequence end.
         """
         batch_size, seq_len = input_ids.shape
 
-        # Get output section (after </reasoning> tag)
-        reasoning_end_id = self.model.reasoning_end_id
-        if reasoning_end_id is None:
+        # Get output section (after </think> tag)
+        # Use full multi-token sequence for reasoning_end_ids
+        reasoning_end_ids = self.model.reasoning_end_ids
+        if not reasoning_end_ids:
             return torch.tensor(0.0, device=self.device)
 
-        # Find positions after </reasoning> tag
+        # Find positions after </think> tag (search for multi-token sequence)
         output_starts = []
         output_ends = []
         for i in range(batch_size):
             ids = input_ids[i].tolist()
-            if reasoning_end_id in ids:
-                # Start is after </reasoning> token
-                start = ids.index(reasoning_end_id) + 1
+            # Search for the full multi-token sequence
+            end_tag_len = len(reasoning_end_ids)
+            found_pos = -1
+            for j in range(len(ids) - end_tag_len + 1):
+                if ids[j:j + end_tag_len] == reasoning_end_ids:
+                    found_pos = j
+                    break
+            
+            if found_pos != -1:
+                # Start is after the full </think> tag sequence
+                start = found_pos + end_tag_len
                 output_starts.append(start)
                 # End is at actual sequence end (ignore padding)
                 # Find where padding starts (pad_token_id or attention_mask = 0)
