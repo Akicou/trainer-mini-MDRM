@@ -94,8 +94,10 @@ class DualModeDataset(Dataset):
         output = item.get("output", "")
 
         # Construct full text with tags
-        # Since reasoning is empty in training data, format as: prompt<reasoning></reasoning>output
-        full_text = f"{prompt}<reasoning>{reasoning}</reasoning>{output}"
+        # The reasoning field already contains <thinking> tags from the original dataset
+        # Format: prompt + assistant_response (which has <thinking> tags)
+        reasoning = item.get("reasoning", "")
+        full_text = f"{prompt}{reasoning}"
 
         # Tokenize
         encodings = self.tokenizer(

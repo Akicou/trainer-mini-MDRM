@@ -155,14 +155,26 @@ def load_huggingface_dataset(
                 "output": item["output"]
             })
         elif "messages" in item:
-            # Chat format
+            # Chat format (ShareGPT)
+            # The assistant message already contains <thinking> tags with reasoning
             messages = item["messages"]
             if len(messages) >= 2:
-                formatted_data.append({
-                    "prompt": messages[0]["content"],
-                    "reasoning": "",
-                    "output": messages[-1]["content"]
-                })
+                # Find the user and assistant messages
+                user_msg = None
+                assistant_msg = None
+                for msg in messages:
+                    if msg["role"] == "user":
+                        user_msg = msg["content"]
+                    elif msg["role"] == "assistant":
+                        assistant_msg = msg["content"]
+                        break  # Take the first assistant response
+
+                if user_msg is not None and assistant_msg is not None:
+                    formatted_data.append({
+                        "prompt": user_msg,
+                        "reasoning": assistant_msg,  # Contains <thinking> tags from original data
+                        "output": ""  # Output is part of reasoning field (after </thinking>)
+                    })
         else:
             # Fallback: use text field
             text = item.get("text", "")
