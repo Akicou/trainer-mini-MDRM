@@ -139,7 +139,8 @@ class DiffusionHead(nn.Module):
         vocab_size: int,
         num_steps: int = 10,
         use_continuous_noise: bool = False,
-        mask_token_id: Optional[int] = None
+        mask_token_id: Optional[int] = None,
+        pad_token_id: int = 0
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -147,16 +148,15 @@ class DiffusionHead(nn.Module):
         self.num_steps = num_steps
         self.use_continuous_noise = use_continuous_noise
 
-        # Special mask token (like BERT's MASK token)
-        if mask_token_id is None:
-            self.mask_token_id = vocab_size
-        else:
-            self.mask_token_id = mask_token_id
+        # Special mask token - use pad_token_id (a valid token within vocab)
+        # Default to 0 (usually padding token) if not specified
+        self.mask_token_id = mask_token_id if mask_token_id is not None else pad_token_id
 
         if use_continuous_noise:
             raise NotImplementedError("Continuous noise not yet implemented")
         else:
-            self.masked_lm_head = nn.Linear(hidden_size, vocab_size + 1)
+            # Output vocab_size logits (not +1 since we use existing token)
+            self.masked_lm_head = nn.Linear(hidden_size, vocab_size)
 
     def get_reveal_schedule(self, step: int, total_steps: int, num_tokens: int) -> torch.Tensor:
         reveal_ratio = 0.5 * (1 + torch.cos(torch.tensor(torch.pi * step / total_steps)))
@@ -272,11 +272,14 @@ class DualModeGenerationModel(nn.Module):
         if hasattr(self.backbone, 'lm_head'):
             ar_state_dict = self.backbone.lm_head.state_dict()
             self.ar_head.lm_head.load_state_dict(ar_state_dict)
+        # Use pad_token_id as mask token (valid token within vocabulary)
+        pad_token_id = self.tokenizer.pad_token_id or 0
         self.diffusion_head = DiffusionHead(
             hidden_size=hidden_size,
             vocab_size=vocab_size,
             num_steps=self.config.diffusion_steps,
-            use_continuous_noise=False
+            use_continuous_noise=False,
+            pad_token_id=pad_token_id
         )
         print("DualModeGenerationModel initialized")
 
@@ -311,7 +314,8 @@ class DualModeGenerationModel(nn.Module):
             temperature=temperature
         )
         output_tokens = output_ids[0].tolist()
-        output_tokens = [t for t in output_tokens if t != self.diffusion_head.mask_token_id]
+        # Note: mask_token_id is now a valid token (pad_token), so don't filter
+        # The model should naturally generate the correct tokens
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         elapsed = time.time() - start_time
         return DualModeOutput(
