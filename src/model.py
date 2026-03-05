@@ -5,7 +5,12 @@ from typing import Optional, Tuple
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, DataCollatorForLanguageModeling
 from peft import LoraConfig, get_peft_model, PeftModel
 from trl import SFTTrainer, SFTConfig
-from unsloth import FastVisionModel
+try:
+    from unsloth import FastVisionModel
+    HAS_UNSLOTH = True
+except (ImportError, NameError, Exception) as e:
+    FastVisionModel = None
+    HAS_UNSLOTH = False
 from src.config import ModelConfig, TrainingConfig
 
 
@@ -31,7 +36,7 @@ class ReasoningModel:
         dtype = torch.bfloat16 if (use_cuda and torch.cuda.is_bf16_supported()) else torch.float16
         self.tokenizer = None
 
-        if self.unsloth_mode:
+        if self.unsloth_mode and HAS_UNSLOTH:
             try:
                 self.model, tokenizer = FastVisionModel.from_pretrained(
                     model_path,
