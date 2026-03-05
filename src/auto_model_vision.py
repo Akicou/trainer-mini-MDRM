@@ -81,18 +81,22 @@ class NayheinForVisionText2Text(HybridReasoningDiffusionModel):
 
 # Register with transformers
 def register_auto_model_vision():
-    """Register Nayhein model with AutoModelVision"""
-    from transformers import AutoModelVision
-    
-    # Add to AutoModelVision mapping
+    """Register Nayhein model with AutoModelVision (if available)"""
     try:
+        from transformers import AutoModelVision
+
+        # Add to AutoModelVision mapping
         if not hasattr(AutoModelVision, "_model_mapping"):
             AutoModelVision._model_mapping = {}
-        
+
         AutoModelVision._model_mapping["nayhein_mdrm"] = NayheinForVisionText2Text
-        
+
         print("Nayhein-8.8B-MDRM registered with AutoModelVision")
+    except ImportError:
+        # AutoModelVision doesn't exist in transformers - this is expected
+        print("Note: AutoModelVision not available in transformers (model will work without it)")
     except Exception as e:
+        # Other errors - log but don't crash
         print(f"Could not register with AutoModelVision: {e}")
         print("Model can still be loaded directly: from src.auto_model_vision import NayheinForVisionText2Text")
 
