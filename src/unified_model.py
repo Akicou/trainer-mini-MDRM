@@ -147,6 +147,193 @@ class DiffusionHead(nn.Module):
         self.num_steps = num_steps
         self.use_continuous_noise = use_continuous_noise
 
-        # Special mask token (like BERT's </think>)
+        # Special mask token (like BERT's MASK token)
         if mask_token_id is None:
-            self.mask_token_id = vocab_size  # Use vocab_size as special
+            self.mask_token_id = vocab_size
+        else:
+            self.mask_token_id = mask_token_id
+
+        if use_continuous_noise:
+            raise NotImplementedError("Continuous noise not yet implemented")
+        else:
+            self.masked_lm_head = nn.Linear(hidden_size, vocab_size + 1)
+
+    def get_reveal_schedule(self, step: int, total_steps: int, num_tokens: int) -> torch.Tensor:
+        reveal_ratio = 0.5 * (1 + torch.cos(torch.tensor(torch.pi * step / total_steps)))
+        num_to_reveal = int(reveal_ratio * num_tokens)
+        reveal_mask = torch.zeros(num_tokens, dtype=torch.bool)
+        reveal_mask[:num_to_reveal] = True
+        perm = torch.randperm(num_tokens)
+        reveal_mask = reveal_mask[perm.argsort()]
+        return reveal_mask
+
+    @torch.no_grad()
+    def generate(
+        self,
+        backbone: nn.Module,
+        reasoning_hidden_states: torch.Tensor,
+        prompt_ids: torch.Tensor,
+        max_tokens: int,
+        temperature: float = 0.7
+    ) -> Tuple[torch.Tensor, List[Dict[str, Any]]]:
+        batch_size = prompt_ids.shape[0]
+        device = prompt_ids.device
+        masked_ids = torch.full(
+            (batch_size, max_tokens),
+            self.mask_token_id,
+            dtype=torch.long,
+            device=device
+        )
+        generation_info = []
+        for step in range(self.num_steps):
+            full_ids = torch.cat([prompt_ids, masked_ids], dim=1)
+            outputs = backbone(input_ids=full_ids, output_hidden_states=True)
+            all_hidden = outputs.last_hidden_state
+            prompt_len = prompt_ids.shape[1]
+            masked_hidden = all_hidden[:, prompt_len:prompt_len + max_tokens, :]
+            logits = self.masked_lm_head(masked_hidden)
+            logits = logits / temperature
+            reveal_mask = self.get_reveal_schedule(step, self.num_steps, max_tokens)
+            reveal_mask = reveal_mask.to(device)
+            probs = F.softmax(logits, dim=-1)
+            predicted_tokens = torch.argmax(probs, dim=-1)
+            for i in range(batch_size):
+                masked_ids[i] = torch.where(reveal_mask, predicted_tokens[i], masked_ids[i])
+            num_revealed = reveal_mask.sum().item()
+            generation_info.append({
+                "step": step,
+                "num_revealed": num_revealed,
+                "total_tokens": max_tokens,
+                "reveal_ratio": num_revealed / max_tokens
+            })
+        return masked_ids, generation_info
+
+
+@dataclass
+class DualModeOutput:
+    prompt: str
+    reasoning: str
+    reasoning_tokens: List[int]
+    output: str
+    output_tokens: List[int]
+    ar_generation_info: List[Dict[str, Any]]
+    diffusion_generation_info: List[Dict[str, Any]]
+    total_time_seconds: float = 0.0
+
+
+class DualModeGenerationModel(nn.Module):
+    def __init__(
+        self,
+        reasoning_model_path: str = "Qwen/Qwen3.5-0.8B-Base",
+        diffusion_model_path: str = "GSAI-ML/LLaDA-V",
+        config: Optional[DualModeConfig] = None,
+        model_config: Optional[ModelConfig] = None
+    ):
+        super().__init__()
+        self.config = config or DualModeConfig()
+        self.model_config = model_config or ModelConfig()
+        use_cuda = torch.cuda.is_available()
+        self.device = "cuda" if use_cuda else "cpu"
+        dtype = torch.bfloat16 if (use_cuda and torch.cuda.is_bf16_supported()) else torch.float16
+        self.dtype = dtype
+        print(f"Initializing DualModeGenerationModel on {self.device}")
+        self.backbone = AutoModelForCausalLM.from_pretrained(
+            reasoning_model_path,
+            trust_remote_code=True,
+            torch_dtype=dtype,
+            device_map="auto" if use_cuda else "cpu"
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            reasoning_model_path,
+            trust_remote_code=True,
+            padding_side="right"
+        )
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.reasoning_start_id = self.tokenizer.encode(
+            self.config.reasoning_start_tag, add_special_tokens=False
+        )[0] if self.config.reasoning_start_tag else None
+        self.reasoning_end_id = self.tokenizer.encode(
+            self.config.reasoning_end_tag, add_special_tokens=False
+        )[0] if self.config.reasoning_end_tag else None
+        self.output_start_id = self.tokenizer.encode(
+            self.config.output_start_tag, add_special_tokens=False
+        )[0] if self.config.output_start_tag else None
+        self.output_end_id = self.tokenizer.encode(
+            self.config.output_end_tag, add_special_tokens=False
+        )[0] if self.config.output_end_tag else None
+        hidden_size = self.backbone.config.hidden_size
+        vocab_size = self.backbone.config.vocab_size
+        self.ar_head = AutoRegressiveHead(
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+            end_tag_id=self.reasoning_end_id
+        )
+        if hasattr(self.backbone, 'lm_head'):
+            ar_state_dict = self.backbone.lm_head.state_dict()
+            self.ar_head.lm_head.load_state_dict(ar_state_dict)
+        self.diffusion_head = DiffusionHead(
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+            num_steps=self.config.diffusion_steps,
+            use_continuous_noise=False
+        )
+        print("DualModeGenerationModel initialized")
+
+    def generate(
+        self,
+        prompt: str,
+        max_reasoning_tokens: int = 1024,
+        max_output_tokens: int = 512,
+        temperature: float = 0.7,
+        show_steps: bool = False
+    ) -> DualModeOutput:
+        import time
+        start_time = time.time()
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        reasoning_ids, ar_info = self.ar_head.generate(
+            backbone=self.backbone,
+            input_ids=input_ids,
+            max_tokens=max_reasoning_tokens,
+            temperature=temperature,
+            eos_token_id=self.reasoning_end_id
+        )
+        reasoning_tokens = reasoning_ids[0].tolist()
+        reasoning_text = self.tokenizer.decode(reasoning_tokens, skip_special_tokens=True)
+        with torch.no_grad():
+            reasoning_outputs = self.backbone(input_ids=reasoning_ids.to(self.device))
+            reasoning_hidden = reasoning_outputs.last_hidden_state
+        output_ids, diffusion_info = self.diffusion_head.generate(
+            backbone=self.backbone,
+            reasoning_hidden_states=reasoning_hidden,
+            prompt_ids=reasoning_ids.to(self.device),
+            max_tokens=max_output_tokens,
+            temperature=temperature
+        )
+        output_tokens = output_ids[0].tolist()
+        output_tokens = [t for t in output_tokens if t != self.diffusion_head.mask_token_id]
+        output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+        elapsed = time.time() - start_time
+        return DualModeOutput(
+            prompt=prompt,
+            reasoning=reasoning_text,
+            reasoning_tokens=reasoning_tokens,
+            output=output_text,
+            output_tokens=output_tokens,
+            ar_generation_info=ar_info if show_steps else [],
+            diffusion_generation_info=diffusion_info if show_steps else [],
+            total_time_seconds=elapsed
+        )
+
+    def save(self, output_dir: str):
+        self.backbone.save_pretrained(output_dir)
+        self.tokenizer.save_pretrained(output_dir)
+        torch.save(self.ar_head.state_dict(), f"{output_dir}/ar_head.pt")
+        torch.save(self.diffusion_head.state_dict(), f"{output_dir}/diffusion_head.pt")
+        print(f"Model saved to {output_dir}")
+
+    def load(self, checkpoint_dir: str):
+        self.backbone = AutoModelForCausalLM.from_pretrained(checkpoint_dir)
+        self.ar_head.load_state_dict(torch.load(f"{checkpoint_dir}/ar_head.pt"))
+        self.diffusion_head.load_state_dict(torch.load(f"{checkpoint_dir}/diffusion_head.pt"))
+        print(f"Model loaded from {checkpoint_dir}")
