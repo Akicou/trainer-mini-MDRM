@@ -41,3 +41,28 @@ class SyntheticDataConfig:
     model_name: Optional[str] = None
     host: str = "http://localhost:1234"  # lmstudio default
     ollama_host: str = "http://localhost:11434"
+
+
+@dataclass
+class DualModeConfig:
+    """Dual-mode generation configuration for unified model
+
+    This configures the behavior of the DualModeGenerationModel which has:
+    - Auto-regressive mode for sequential reasoning generation
+    - Diffusion-style mode for parallel/noise-based output generation
+    """
+    # Auto-regressive settings
+    ar_temperature: float = 0.7
+    ar_top_p: float = 0.9
+    ar_max_tokens: int = 1024
+
+    # Diffusion settings
+    diffusion_steps: int = 10
+    noise_schedule: str = "linear"  # "linear", "cosine" - for future continuous noise
+    diffusion_max_tokens: int = 512
+
+    # Mode switching tags
+    reasoning_start_tag: str = ""
+    reasoning_end_tag: str = ""
+    output_start_tag: str = "<output>"
+    output_end_tag: str = "</output>"
