@@ -94,7 +94,8 @@ class DualModeDataset(Dataset):
         output = item.get("output", "")
 
         # Construct full text with tags
-        # Since reasoning is empty in training data, format as: prompt<reasoning></reasoning>outputN        full_text = f"{prompt}<reasoning>{reasoning}</reasoning>{output}"
+        # Since reasoning is empty in training data, format as: prompt<reasoning></reasoning>output
+        full_text = f"{prompt}<reasoning>{reasoning}</reasoning>{output}"
 
         # Tokenize
         encodings = self.tokenizer(
