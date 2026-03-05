@@ -32,12 +32,12 @@ except ImportError:
 class DualModeTrainingConfig:
     """Training configuration for dual-mode model"""
     # Standard training settings
-    batch_size: int = 4
+    batch_size: int = 2  # Reduced from 4 to save memory
     learning_rate: float = 2e-5
     num_epochs: int = 3
     max_steps: Optional[int] = None
-    max_length: int = 2048
-    gradient_accumulation_steps: int = 4
+    max_length: int = 512  # Reduced from 2048 to save memory (1/4 VRAM usage)
+    gradient_accumulation_steps: int = 8  # Increased to maintain effective batch size
     warmup_ratio: float = 0.1
     warmup_steps: int = 20
 
@@ -75,7 +75,7 @@ class DualModeDataset(Dataset):
         self,
         data: List[Dict[str, str]],
         tokenizer: AutoTokenizer,
-        max_length: int = 2048
+        max_length: int = 512  # Reduced from 2048 to save memory (1/4 VRAM)
     ):
         self.data = data
         self.tokenizer = tokenizer
@@ -301,7 +301,7 @@ class DualModeTrainer:
         return diffusion_loss
 
     def train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
-        """Single training step"""
+        """Single training step with memory optimization"""
         input_ids = batch["input_ids"].to(self.device)
         attention_mask = batch["attention_mask"].to(self.device)
         labels = batch["labels"].to(self.device)
@@ -309,15 +309,18 @@ class DualModeTrainer:
         # Set model to training mode
         self.model.train()
 
-        # Compute losses
-        ar_loss = self.compute_ar_loss(input_ids, attention_mask, labels)
-        diffusion_loss = self.compute_diffusion_loss(input_ids, attention_mask, labels)
+        # Compute both losses (use gradient checkpointing implicitly via torch)
+        with torch.cuda.amp.autocast(enabled=self.device.type == "cuda"):  # Mixed precision
+            ar_loss = self.compute_ar_loss(input_ids, attention_mask, labels)
+            # Clear cache before second forward pass
+            torch.cuda.empty_cache()
+            diffusion_loss = self.compute_diffusion_loss(input_ids, attention_mask, labels)
 
-        # Combined loss
-        total_loss = (
-            self.config.ar_loss_weight * ar_loss +
-            self.config.diffusion_loss_weight * diffusion_loss
-        )
+            # Combined loss
+            total_loss = (
+                self.config.ar_loss_weight * ar_loss +
+                self.config.diffusion_loss_weight * diffusion_loss
+            )
 
         # Backward pass
         total_loss.backward()
@@ -344,7 +347,7 @@ class DualModeTrainer:
         num_epochs: Optional[int] = None,
         max_steps: Optional[int] = None
     ):
-        """Full training loop with WandB logging"""
+        """Full training loop with WandB logging and gradient accumulation"""
         num_epochs = num_epochs or self.config.num_epochs
         max_steps = max_steps or self.config.max_steps
 
@@ -357,6 +360,7 @@ class DualModeTrainer:
         )
 
         self.global_step = 0
+        self.accumulation_step = 0
         start_time = time.time()
 
         for epoch in range(num_epochs):
@@ -370,34 +374,66 @@ class DualModeTrainer:
                 batch = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
                         for k, v in batch.items()}
 
-                # Training step
-                losses = self.train_step(batch)
+                # Training step with gradient accumulation
+                input_ids = batch["input_ids"].to(self.device)
+                attention_mask = batch["attention_mask"].to(self.device)
+                labels = batch["labels"].to(self.device)
 
-                # Console logging
-                if batch_idx % 10 == 0:
-                    elapsed = time.time() - start_time
-                    steps_per_sec = self.global_step / elapsed if elapsed > 0 else 0
-                    print(f"Step {self.global_step}: "
-                          f"loss={losses['total_loss']:.4f}, "
-                          f"ar_loss={losses['ar_loss']:.4f}, "
-                          f"diffusion_loss={losses['diffusion_loss']:.4f}, "
-                          f"lr={losses['learning_rate']:.2e} "
-                          f"({steps_per_sec:.2f} steps/s)")
+                self.model.train()
 
-                # WandB logging
-                if batch_idx % self.config.wandb_log_interval == 0:
-                    log_metrics = {
-                        "train/total_loss": losses['total_loss'],
-                        "train/ar_loss": losses['ar_loss'],
-                        "train/diffusion_loss": losses['diffusion_loss'],
-                        "train/learning_rate": losses['learning_rate'],
-                        "train/epoch": epoch,
-                        "train/step": self.global_step,
-                        "train/samples_per_second": self.config.batch_size / (time.time() - start_time + 1e-6) * self.global_step,
-                    }
-                    self._log_to_wandb(log_metrics, self.global_step)
+                # Forward pass with mixed precision
+                with torch.cuda.amp.autocast(enabled=self.device.type == "cuda"):
+                    ar_loss = self.compute_ar_loss(input_ids, attention_mask, labels)
+                    torch.cuda.empty_cache()  # Clear cache between passes
+                    diffusion_loss = self.compute_diffusion_loss(input_ids, attention_mask, labels)
 
-                self.global_step += 1
+                    # Scale loss for gradient accumulation
+                    total_loss = (
+                        self.config.ar_loss_weight * ar_loss +
+                        self.config.diffusion_loss_weight * diffusion_loss
+                    ) / self.config.gradient_accumulation_steps
+
+                # Backward pass (accumulate gradients)
+                total_loss.backward()
+
+                self.accumulation_step += 1
+
+                # Only step optimizer after accumulating enough gradients
+                if self.accumulation_step % self.config.gradient_accumulation_steps == 0:
+                    # Gradient clipping
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+
+                    # Optimizer step
+                    self.optimizer.step()
+                    self.scheduler.step()
+                    self.optimizer.zero_grad()
+
+                    # Update global step
+                    self.global_step += 1
+
+                    # Console logging
+                    if self.global_step % 10 == 0:
+                        elapsed = time.time() - start_time
+                        steps_per_sec = self.global_step / elapsed if elapsed > 0 else 0
+                        print(f"Step {self.global_step}: "
+                              f"loss={total_loss.item() * self.config.gradient_accumulation_steps:.4f}, "
+                              f"ar_loss={ar_loss.item():.4f}, "
+                              f"diffusion_loss={diffusion_loss.item():.4f}, "
+                              f"lr={self.scheduler.get_last_lr()[0]:.2e} "
+                              f"({steps_per_sec:.2f} steps/s)")
+
+                    # WandB logging
+                    if self.global_step % self.config.wandb_log_interval == 0:
+                        log_metrics = {
+                            "train/total_loss": total_loss.item() * self.config.gradient_accumulation_steps,
+                            "train/ar_loss": ar_loss.item(),
+                            "train/diffusion_loss": diffusion_loss.item(),
+                            "train/learning_rate": self.scheduler.get_last_lr()[0],
+                            "train/epoch": epoch,
+                            "train/step": self.global_step,
+                            "train/samples_per_second": self.config.batch_size * self.config.gradient_accumulation_steps / (time.time() - start_time + 1e-6) * self.global_step,
+                        }
+                        self._log_to_wandb(log_metrics, self.global_step)
 
                 # Check max steps
                 if max_steps and self.global_step >= max_steps:
