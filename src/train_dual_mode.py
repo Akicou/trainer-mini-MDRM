@@ -280,16 +280,21 @@ class DualModeTrainer:
                 masked_input_ids[i, mask_positions] = mask_token_id
                 labels_for_diffusion[i, mask_positions] = input_ids[i, mask_positions]
 
-        # Forward pass with masked input
+        # Forward pass with masked input (get hidden states for diffusion head)
         outputs = self.model.backbone(
             input_ids=masked_input_ids,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
+            output_hidden_states=True
         )
+
+        # Get hidden states from last layer
+        # outputs.hidden_states is a tuple of (batch, seq_len, hidden_size) for each layer
+        last_hidden_states = outputs.hidden_states[-1]  # Get last layer's hidden states
 
         # Get logits from diffusion head
         logits = self.model.diffusion_head.masked_lm_head(
-            outputs.last_hidden_state
-        )  # [batch, seq_len, vocab_size+1]
+            last_hidden_states
+        )  # [batch, seq_len, vocab_size]
 
         # Compute loss only on masked positions
         loss_fct = nn.CrossEntropyLoss(ignore_index=-100)

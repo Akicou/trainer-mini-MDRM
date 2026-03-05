@@ -86,7 +86,9 @@ class AutoRegressiveHead(nn.Module):
             )
 
             # Get logits for next token
-            logits = self.lm_head(outputs.last_hidden_state[:, -1:, :])
+            # outputs.hidden_states is a tuple - use last element for final layer
+            hidden_states = outputs.hidden_states[-1]  # Last layer
+            logits = self.lm_head(hidden_states[:, -1:, :])
 
             # Apply temperature
             logits = logits / temperature
@@ -188,7 +190,8 @@ class DiffusionHead(nn.Module):
         for step in range(self.num_steps):
             full_ids = torch.cat([prompt_ids, masked_ids], dim=1)
             outputs = backbone(input_ids=full_ids, output_hidden_states=True)
-            all_hidden = outputs.last_hidden_state
+            # Get last layer hidden states
+            all_hidden = outputs.hidden_states[-1]
             prompt_len = prompt_ids.shape[1]
             masked_hidden = all_hidden[:, prompt_len:prompt_len + max_tokens, :]
             logits = self.masked_lm_head(masked_hidden)
@@ -304,8 +307,8 @@ class DualModeGenerationModel(nn.Module):
         reasoning_tokens = reasoning_ids[0].tolist()
         reasoning_text = self.tokenizer.decode(reasoning_tokens, skip_special_tokens=True)
         with torch.no_grad():
-            reasoning_outputs = self.backbone(input_ids=reasoning_ids.to(self.device))
-            reasoning_hidden = reasoning_outputs.last_hidden_state
+            reasoning_outputs = self.backbone(input_ids=reasoning_ids.to(self.device), output_hidden_states=True)
+            reasoning_hidden = reasoning_outputs.hidden_states[-1]
         output_ids, diffusion_info = self.diffusion_head.generate(
             backbone=self.backbone,
             reasoning_hidden_states=reasoning_hidden,
