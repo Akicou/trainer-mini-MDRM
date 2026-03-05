@@ -83,6 +83,8 @@ def parse_args():
                         help="Dataset to train on (e.g., nvidia/Nemotron-Cascade-SFT-Stage-1)")
     parser.add_argument("--dataset-split", type=str, default="train",
                         help="Dataset split to use")
+    parser.add_argument("--dataset-config", type=str, default="general",
+                        help="Dataset config name (for multi-config datasets like Nemotron)")
     parser.add_argument("--dataset-size", type=int, default=10000,
                         help="Number of samples to use from dataset")
     parser.add_argument("--output", type=str, default="./checkpoints/dual-mode",
@@ -112,6 +114,7 @@ def parse_args():
 def load_huggingface_dataset(
     dataset_name: str,
     split: str = "train",
+    config: Optional[str] = None,
     num_samples: int = 10000
 ):
     """Load dataset from HuggingFace and format for dual-mode training"""
@@ -121,11 +124,14 @@ def load_huggingface_dataset(
         print("Error: datasets library not installed. Install with: pip install datasets")
         sys.exit(1)
 
-    print(f"Loading dataset: {dataset_name} ({split})")
+    print(f"Loading dataset: {dataset_name}/{config if config else split} ({split})")
     print(f"Using {num_samples} samples...")
 
-    # Load dataset
-    dataset = load_dataset(dataset_name, split=split)
+    # Load dataset (with config if specified)
+    if config:
+        dataset = load_dataset(dataset_name, config, split=split)
+    else:
+        dataset = load_dataset(dataset_name, split=split)
 
     # Take subset if needed
     if num_samples < len(dataset):
@@ -267,6 +273,7 @@ def run_dual_mode_training(args):
     train_data = load_huggingface_dataset(
         dataset_name=args.dataset,
         split=args.dataset_split,
+        config=args.dataset_config,
         num_samples=args.dataset_size
     )
 
@@ -327,6 +334,7 @@ def run_post_training(args):
     train_data = load_huggingface_dataset(
         dataset_name=args.dataset,
         split=args.dataset_split,
+        config=args.dataset_config,
         num_samples=args.dataset_size
     )
 
