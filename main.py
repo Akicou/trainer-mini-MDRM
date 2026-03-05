@@ -34,79 +34,136 @@ from src.config import DualModeConfig
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Nayhein-8.8B-MDRM - Hybrid and Dual-Mode Models",
-        epilog="For more information, see README.md"
+        epilog="For more information, see README.md",
     )
 
     # Mode selection
     mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("--dual-mode", action="store_true",
-                           help="Use dual-mode unified model (default: hybrid)")
-    mode_group.add_argument("--train-dual", action="store_true",
-                           help="Train dual-mode model")
-    mode_group.add_argument("--post-train", action="store_true",
-                           help="Post-train dual-mode model on quality dataset")
+    mode_group.add_argument(
+        "--dual-mode",
+        action="store_true",
+        help="Use dual-mode unified model (default: hybrid)",
+    )
+    mode_group.add_argument(
+        "--train-dual", action="store_true", help="Train dual-mode model"
+    )
+    mode_group.add_argument(
+        "--post-train",
+        action="store_true",
+        help="Post-train dual-mode model on quality dataset",
+    )
 
     # Input prompt (for generation modes)
-    parser.add_argument("prompt", nargs="?", default=None,
-                        help="Input prompt")
+    parser.add_argument("prompt", nargs="?", default=None, help="Input prompt")
 
     # Generation options
-    parser.add_argument("--interactive", action="store_true",
-                        help="Run in interactive mode")
-    parser.add_argument("--show-reasoning", action="store_true",
-                        help="Show reasoning output")
-    parser.add_argument("--show-diffusion-steps", action="store_true",
-                        help="Show diffusion unmasking steps")
-    parser.add_argument("--show-steps", action="store_true",
-                        help="Show both AR and diffusion generation steps (dual-mode)")
+    parser.add_argument(
+        "--interactive", action="store_true", help="Run in interactive mode"
+    )
+    parser.add_argument(
+        "--show-reasoning", action="store_true", help="Show reasoning output"
+    )
+    parser.add_argument(
+        "--show-diffusion-steps",
+        action="store_true",
+        help="Show diffusion unmasking steps",
+    )
+    parser.add_argument(
+        "--show-steps",
+        action="store_true",
+        help="Show both AR and diffusion generation steps (dual-mode)",
+    )
 
     # Model paths
-    parser.add_argument("--model", type=str, default="Qwen/Qwen3.5-0.8B-Base",
-                        help="Base model path (for reasoning/backbone)")
-    parser.add_argument("--diffusion-model", type=str, default="GSAI-ML/LLaDA-V",
-                        help="Diffusion model path")
-    parser.add_argument("--load-from", type=str, default=None,
-                        help="Load model from checkpoint")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="Qwen/Qwen3.5-0.8B-Base",
+        help="Base model path (for reasoning/backbone)",
+    )
+    parser.add_argument(
+        "--diffusion-model",
+        type=str,
+        default="GSAI-ML/LLaDA-V",
+        help="Diffusion model path",
+    )
+    parser.add_argument(
+        "--load-from", type=str, default=None, help="Load model from checkpoint"
+    )
 
     # Generation parameters
-    parser.add_argument("--temperature", type=float, default=0.7,
-                        help="Temperature for generation")
-    parser.add_argument("--max-tokens", type=int, default=1024,
-                        help="Maximum output tokens")
-    parser.add_argument("--ar-max-tokens", type=int, default=1024,
-                        help="Max tokens for AR reasoning (dual-mode)")
-    parser.add_argument("--diffusion-max-tokens", type=int, default=512,
-                        help="Max tokens for diffusion output (dual-mode)")
+    parser.add_argument(
+        "--temperature", type=float, default=0.7, help="Temperature for generation"
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=1024, help="Maximum output tokens"
+    )
+    parser.add_argument(
+        "--ar-max-tokens",
+        type=int,
+        default=1024,
+        help="Max tokens for AR reasoning (dual-mode)",
+    )
+    parser.add_argument(
+        "--diffusion-max-tokens",
+        type=int,
+        default=512,
+        help="Max tokens for diffusion output (dual-mode)",
+    )
 
     # Training options
-    parser.add_argument("--dataset", type=str, default=None,
-                        help="Dataset to train on (e.g., nvidia/Nemotron-Cascade-SFT-Stage-1)")
-    parser.add_argument("--dataset-split", type=str, default="train",
-                        help="Dataset split to use")
-    parser.add_argument("--dataset-config", type=str, default="general",
-                        help="Dataset config name (for multi-config datasets like Nemotron)")
-    parser.add_argument("--dataset-size", type=int, default=10000,
-                        help="Number of samples to use from dataset")
-    parser.add_argument("--output", type=str, default="./checkpoints/dual-mode",
-                        help="Output directory for checkpoints")
-    parser.add_argument("--epochs", type=int, default=3,
-                        help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=4,
-                        help="Training batch size")
-    parser.add_argument("--learning-rate", type=float, default=2e-5,
-                        help="Learning rate")
-    parser.add_argument("--max-steps", type=int, default=None,
-                        help="Maximum training steps")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Dataset to train on (e.g., nvidia/Nemotron-Cascade-SFT-Stage-1)",
+    )
+    parser.add_argument(
+        "--dataset-split", type=str, default="train", help="Dataset split to use"
+    )
+    parser.add_argument(
+        "--dataset-config",
+        type=str,
+        default="general",
+        help="Dataset config name (for multi-config datasets like Nemotron)",
+    )
+    parser.add_argument(
+        "--dataset-size",
+        type=int,
+        default=10000,
+        help="Number of samples to use from dataset",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="./checkpoints/dual-mode",
+        help="Output directory for checkpoints",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=3, help="Number of training epochs"
+    )
+    parser.add_argument("--batch-size", type=int, default=4, help="Training batch size")
+    parser.add_argument(
+        "--learning-rate", type=float, default=2e-5, help="Learning rate"
+    )
+    parser.add_argument(
+        "--max-steps", type=int, default=None, help="Maximum training steps"
+    )
 
     # WandB options
-    parser.add_argument("--wandb", action="store_true",
-                        help="Enable WandB logging")
-    parser.add_argument("--wandb-project", type=str, default="dual-mode-model",
-                        help="WandB project name")
-    parser.add_argument("--wandb-entity", type=str, default=None,
-                        help="WandB entity (username or team)")
-    parser.add_argument("--wandb-run-name", type=str, default=None,
-                        help="Custom WandB run name")
+    parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="dual-mode-model",
+        help="WandB project name",
+    )
+    parser.add_argument(
+        "--wandb-entity", type=str, default=None, help="WandB entity (username or team)"
+    )
+    parser.add_argument(
+        "--wandb-run-name", type=str, default=None, help="Custom WandB run name"
+    )
 
     return parser.parse_args()
 
@@ -115,13 +172,15 @@ def load_huggingface_dataset(
     dataset_name: str,
     split: str = "train",
     config: Optional[str] = None,
-    num_samples: int = 10000
+    num_samples: int = 10000,
 ):
     """Load dataset from HuggingFace and format for dual-mode training"""
     try:
         from datasets import load_dataset
     except ImportError:
-        print("Error: datasets library not installed. Install with: pip install datasets")
+        print(
+            "Error: datasets library not installed. Install with: pip install datasets"
+        )
         sys.exit(1)
 
     print(f"Loading dataset: {dataset_name}/{config if config else split} ({split})")
@@ -143,17 +202,17 @@ def load_huggingface_dataset(
         # Try to extract prompt, reasoning, and output
         # This depends on the dataset structure
         if "prompt" in item and "completion" in item:
-            formatted_data.append({
-                "prompt": item["prompt"],
-                "reasoning": "",  # Will be generated by model
-                "output": item["completion"]
-            })
+            formatted_data.append(
+                {
+                    "prompt": item["prompt"],
+                    "reasoning": "",  # Will be generated by model
+                    "output": item["completion"],
+                }
+            )
         elif "input" in item and "output" in item:
-            formatted_data.append({
-                "prompt": item["input"],
-                "reasoning": "",
-                "output": item["output"]
-            })
+            formatted_data.append(
+                {"prompt": item["input"], "reasoning": "", "output": item["output"]}
+            )
         elif "messages" in item:
             # Chat format (ShareGPT)
             # The assistant message already contains <thinking> tags with reasoning
@@ -170,22 +229,38 @@ def load_huggingface_dataset(
                         break  # Take the first assistant response
 
                 if user_msg is not None and assistant_msg is not None:
-                    formatted_data.append({
-                        "prompt": user_msg,
-                        "reasoning": assistant_msg,  # Contains <thinking> tags from original data
-                        "output": ""  # Output is part of reasoning field (after </thinking>)
-                    })
+                    # Parse assistant_msg to extract reasoning (inside tags) and output (after tags)
+                    import re
+                    # Match <think>...</think> pattern
+                    match = re.search(r"<think>(.*?)</think>", assistant_msg, re.DOTALL)
+                    if match:
+                        reasoning = match.group(1).strip()
+                        output = assistant_msg[match.end():].strip()
+                    else:
+                        # Fallback if no tags found
+                        reasoning = assistant_msg
+                        output = ""
+                    
+                    formatted_data.append(
+                        {
+                            "prompt": user_msg,
+                            "reasoning": reasoning,
+                            "output": output,
+                        }
+                    )
         else:
             # Fallback: use text field
             text = item.get("text", "")
             if text:
                 # Simple split on first newline or use whole text as output
                 parts = text.split("\n", 1)
-                formatted_data.append({
-                    "prompt": "",
-                    "reasoning": "",
-                    "output": parts[0] if len(parts) == 1 else parts[1]
-                })
+                formatted_data.append(
+                    {
+                        "prompt": "",
+                        "reasoning": "",
+                        "output": parts[0] if len(parts) == 1 else parts[1],
+                    }
+                )
 
     print(f"Formatted {len(formatted_data)} examples for training")
     return formatted_data
@@ -199,14 +274,13 @@ def run_dual_mode_generation(args):
 
     # Initialize dual-mode model
     dual_config = DualModeConfig(
-        ar_max_tokens=args.ar_max_tokens,
-        diffusion_max_tokens=args.diffusion_max_tokens
+        ar_max_tokens=args.ar_max_tokens, diffusion_max_tokens=args.diffusion_max_tokens
     )
 
     model = DualModeGenerationModel(
         reasoning_model_path=args.model,
         diffusion_model_path=args.diffusion_model,
-        config=dual_config
+        config=dual_config,
     )
 
     print("Model loaded successfully!")
@@ -217,7 +291,7 @@ def run_dual_mode_generation(args):
         while True:
             try:
                 prompt = input("\nYou: ").strip()
-                if prompt.lower() == 'quit':
+                if prompt.lower() == "quit":
                     break
 
                 start_time = time.time()
@@ -226,15 +300,19 @@ def run_dual_mode_generation(args):
                     max_reasoning_tokens=args.ar_max_tokens,
                     max_output_tokens=args.diffusion_max_tokens,
                     temperature=args.temperature,
-                    show_steps=args.show_steps
+                    show_steps=args.show_steps,
                 )
                 elapsed = time.time() - start_time
 
-                print(f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}")
+                print(
+                    f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}"
+                )
 
                 if args.show_reasoning:
                     print(f"\nReasoning:")
-                    print(f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}")
+                    print(
+                        f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+                    )
 
                 if args.show_steps:
                     print(f"\n=== Generation Stats ===")
@@ -257,15 +335,19 @@ def run_dual_mode_generation(args):
         max_reasoning_tokens=args.ar_max_tokens,
         max_output_tokens=args.diffusion_max_tokens,
         temperature=args.temperature,
-        show_steps=args.show_steps
+        show_steps=args.show_steps,
     )
     elapsed = time.time() - start_time
 
-    print(f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}")
+    print(
+        f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}"
+    )
 
     if args.show_reasoning:
         print(f"\nReasoning:")
-        print(f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}")
+        print(
+            f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+        )
 
     if args.show_steps:
         print(f"\n=== Generation Stats ===")
@@ -286,7 +368,7 @@ def run_dual_mode_training(args):
         dataset_name=args.dataset,
         split=args.dataset_split,
         config=args.dataset_config,
-        num_samples=args.dataset_size
+        num_samples=args.dataset_size,
     )
 
     # Training config
@@ -298,7 +380,7 @@ def run_dual_mode_training(args):
         use_wandb=args.wandb,
         wandb_project=args.wandb_project,
         wandb_entity=args.wandb_entity,
-        wandb_run_name=args.wandb_run_name
+        wandb_run_name=args.wandb_run_name,
     )
 
     # Dual-mode config
@@ -324,7 +406,7 @@ def run_dual_mode_training(args):
         use_wandb=args.wandb,
         wandb_project=args.wandb_project,
         wandb_entity=args.wandb_entity,
-        wandb_run_name=args.wandb_run_name
+        wandb_run_name=args.wandb_run_name,
     )
 
     print(f"\nTraining complete! Model saved to {args.output}")
@@ -347,7 +429,7 @@ def run_post_training(args):
         dataset_name=args.dataset,
         split=args.dataset_split,
         config=args.dataset_config,
-        num_samples=args.dataset_size
+        num_samples=args.dataset_size,
     )
 
     # Training config (use lower learning rate for post-training)
@@ -355,7 +437,7 @@ def run_post_training(args):
         batch_size=args.batch_size,
         learning_rate=args.learning_rate * 0.5,  # Lower LR for fine-tuning
         num_epochs=args.epochs,
-        max_steps=args.max_steps
+        max_steps=args.max_steps,
     )
 
     print(f"\nPost-training dual-mode model from {args.load_from}")
@@ -363,7 +445,9 @@ def run_post_training(args):
     print(f"Output directory: {args.output}")
 
     # Note: For true post-training, we'd need to modify train_dual_mode to support loading checkpoint
-    print("Note: Post-training feature requires checkpoint loading in train_dual_mode.py")
+    print(
+        "Note: Post-training feature requires checkpoint loading in train_dual_mode.py"
+    )
     print("For now, you can train from scratch with the full dataset.")
 
 
@@ -391,18 +475,20 @@ def main():
         if args.load_from:
             model = HybridReasoningDiffusionModel(
                 reasoning_model_path=args.load_from,
-                diffusion_model_path=args.diffusion_model
+                diffusion_model_path=args.diffusion_model,
             )
             model.load(args.load_from)
         else:
             model = HybridReasoningDiffusionModel(
                 reasoning_model_path=args.model,
-                diffusion_model_path=args.diffusion_model
+                diffusion_model_path=args.diffusion_model,
             )
         print("Model loaded successfully!")
     except Exception as e:
         print(f"Error loading model: {e}")
-        print("Make sure the model is downloaded or use --load-from with fine-tuned checkpoint")
+        print(
+            "Make sure the model is downloaded or use --load-from with fine-tuned checkpoint"
+        )
         return
 
     # Interactive mode
@@ -411,20 +497,24 @@ def main():
         while True:
             try:
                 prompt = input("\nYou: ").strip()
-                if prompt.lower() == 'quit':
+                if prompt.lower() == "quit":
                     break
 
                 output = model.generate(
                     prompt=prompt,
                     max_reasoning_tokens=args.max_tokens,
                     temperature=args.temperature,
-                    show_diffusion_steps=args.show_diffusion_steps
+                    show_diffusion_steps=args.show_diffusion_steps,
                 )
 
-                print(f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}")
+                print(
+                    f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}"
+                )
 
                 if args.show_reasoning:
-                    print(f"\n{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}")
+                    print(
+                        f"\n{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+                    )
 
                 if args.show_diffusion_steps and output.diffusion_steps:
                     print(f"\n=== Diffusion Unmasking Steps ===")
@@ -438,6 +528,7 @@ def main():
     # Single prompt mode
     if not args.prompt:
         from argparse import Namespace
+
         # Re-create parser to show help
         parser = argparse.ArgumentParser()
         parser.parse_args([])
@@ -448,14 +539,18 @@ def main():
         prompt=args.prompt,
         max_reasoning_tokens=args.max_tokens,
         temperature=args.temperature,
-        show_diffusion_steps=args.show_diffusion_steps
+        show_diffusion_steps=args.show_diffusion_steps,
     )
 
-    print(f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}")
+    print(
+        f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}"
+    )
 
     if args.show_reasoning:
         print(f"\nReasoning:")
-        print(f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}")
+        print(
+            f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+        )
 
     if args.show_diffusion_steps and output.diffusion_steps:
         print(f"\n=== Diffusion Unmasking Steps ===")
