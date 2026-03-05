@@ -94,7 +94,7 @@ class DualModeDataset(Dataset):
         output = item.get("output", "")
 
         # Construct full text with tags
-        full_text = f"{prompt} {reasoning} </think> <output> {output} </output>"
+        # Since reasoning is empty in training data, format as: prompt<reasoning></reasoning>outputN        full_text = f"{prompt}<reasoning>{reasoning}</reasoning>{output}"
 
         # Tokenize
         encodings = self.tokenizer(
@@ -233,25 +233,33 @@ class DualModeTrainer:
         Compute diffusion-style masked token prediction loss
 
         This uses BERT/T5-style masked language modeling.
+        Format: prompt<reasoning>reasoning</reasoning>output
+        Output is everything after </reasoning> tag until sequence end.
         """
         batch_size, seq_len = input_ids.shape
 
-        # Get output section (after <output> tag)
-        output_start_id = self.model.output_start_id
-        if output_start_id is None:
+        # Get output section (after </reasoning> tag)
+        reasoning_end_id = self.model.reasoning_end_id
+        if reasoning_end_id is None:
             return torch.tensor(0.0, device=self.device)
 
-        # Find positions of <output> tags
+        # Find positions after </reasoning> tag
         output_starts = []
         output_ends = []
         for i in range(batch_size):
             ids = input_ids[i].tolist()
-            if output_start_id in ids:
-                start = ids.index(output_start_id) + 1  # After <output>
+            if reasoning_end_id in ids:
+                # Start is after </reasoning> token
+                start = ids.index(reasoning_end_id) + 1
                 output_starts.append(start)
-                # Find end or use sequence end
-                if self.model.output_end_id in ids[start:]:
-                    end = ids.index(self.model.output_end_id, start)
+                # End is at actual sequence end (ignore padding)
+                # Find where padding starts (pad_token_id or attention_mask = 0)
+                if self.model.tokenizer.pad_token_id:
+                    pad_id = self.model.tokenizer.pad_token_id
+                    if pad_id in ids[start:]:
+                        end = ids.index(pad_id, start)
+                    else:
+                        end = seq_len
                 else:
                     end = seq_len
                 output_ends.append(end)

@@ -62,7 +62,8 @@ class DualModeConfig:
     diffusion_max_tokens: int = 512
 
     # Mode switching tags
-    reasoning_start_tag: str = ""
-    reasoning_end_tag: str = ""
-    output_start_tag: str = "<output>"
-    output_end_tag: str = "</output>"
+    # Format: prompt<reasoning>reasoning</reasoning>output (output directly after end tag)
+    reasoning_start_tag: str = "<reasoning>"
+    reasoning_end_tag: str = "</reasoning>"
+    output_start_tag: str = ""  # Not used - output comes after </reasoning>
+    output_end_tag: str = ""  # Not used
