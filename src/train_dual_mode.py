@@ -310,7 +310,7 @@ class DualModeTrainer:
         self.model.train()
 
         # Compute both losses (use gradient checkpointing implicitly via torch)
-        with torch.cuda.amp.autocast(enabled=self.device.type == "cuda"):  # Mixed precision
+        with torch.cuda.amp.autocast(enabled=self.device == "cuda"):  # Mixed precision
             ar_loss = self.compute_ar_loss(input_ids, attention_mask, labels)
             # Clear cache before second forward pass
             torch.cuda.empty_cache()
@@ -382,7 +382,7 @@ class DualModeTrainer:
                 self.model.train()
 
                 # Forward pass with mixed precision
-                with torch.cuda.amp.autocast(enabled=self.device.type == "cuda"):
+                with torch.cuda.amp.autocast(enabled=self.device == "cuda"):
                     ar_loss = self.compute_ar_loss(input_ids, attention_mask, labels)
                     torch.cuda.empty_cache()  # Clear cache between passes
                     diffusion_loss = self.compute_diffusion_loss(input_ids, attention_mask, labels)
