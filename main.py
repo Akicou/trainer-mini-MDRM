@@ -277,11 +277,29 @@ def run_dual_mode_generation(args):
         ar_max_tokens=args.ar_max_tokens, diffusion_max_tokens=args.diffusion_max_tokens
     )
 
-    model = DualModeGenerationModel(
-        reasoning_model_path=args.model,
-        diffusion_model_path=args.diffusion_model,
-        config=dual_config,
-    )
+    if args.load_from:
+        # Load from trained checkpoint
+        print(f"Loading from checkpoint: {args.load_from}")
+        model = DualModeGenerationModel(
+            reasoning_model_path=args.load_from,
+            diffusion_model_path=args.diffusion_model,
+            config=dual_config,
+        )
+        # Load trained heads
+        import torch
+        model.ar_head.load_state_dict(
+            torch.load(f"{args.load_from}/ar_head.pt", map_location=model.device)
+        )
+        model.diffusion_head.load_state_dict(
+            torch.load(f"{args.load_from}/diffusion_head.pt", map_location=model.device)
+        )
+        print("Loaded trained heads from checkpoint!")
+    else:
+        model = DualModeGenerationModel(
+            reasoning_model_path=args.model,
+            diffusion_model_path=args.diffusion_model,
+            config=dual_config,
+        )
 
     print("Model loaded successfully!")
 
