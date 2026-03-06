@@ -324,13 +324,13 @@ def run_dual_mode_generation(args):
                 elapsed = time.time() - start_time
 
                 print(
-                    f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}"
+                    f"\n{model.config.output_start_tag}{output.output}{model.config.output_end_tag}"
                 )
 
                 if args.show_reasoning:
                     print(f"\nReasoning:")
                     print(
-                        f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+                        f"{model.config.reasoning_start_tag}{output.reasoning}{model.config.reasoning_end_tag}"
                     )
 
                 if args.show_steps:
@@ -359,13 +359,13 @@ def run_dual_mode_generation(args):
     elapsed = time.time() - start_time
 
     print(
-        f"\n{model.config.output_tag_start}{output.output}{model.config.output_tag_end}"
+        f"\n{model.config.output_start_tag}{output.output}{model.config.output_end_tag}"
     )
 
     if args.show_reasoning:
         print(f"\nReasoning:")
         print(
-            f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+            f"{model.config.reasoning_start_tag}{output.reasoning}{model.config.reasoning_end_tag}"
         )
 
     if args.show_steps:
@@ -527,12 +527,12 @@ def main():
                 )
 
                 print(
-                    f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}"
+                    f"\n{model.config.output_start_tag}{output.final_output}{model.config.output_end_tag}"
                 )
 
                 if args.show_reasoning:
                     print(
-                        f"\n{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+                        f"\n{model.config.reasoning_start_tag}{output.reasoning}{model.config.reasoning_end_tag}"
                     )
 
                 if args.show_diffusion_steps and output.diffusion_steps:
@@ -562,13 +562,13 @@ def main():
     )
 
     print(
-        f"\n{model.config.output_tag_start}{output.final_output}{model.config.output_tag_end}"
+        f"\n{model.config.output_start_tag}{output.final_output}{model.config.output_end_tag}"
     )
 
     if args.show_reasoning:
         print(f"\nReasoning:")
         print(
-            f"{model.config.reasoning_tag_start}{output.reasoning}{model.config.reasoning_tag_end}"
+            f"{model.config.reasoning_start_tag}{output.reasoning}{model.config.reasoning_end_tag}"
         )
 
     if args.show_diffusion_steps and output.diffusion_steps:
