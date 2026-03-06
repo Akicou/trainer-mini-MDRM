@@ -285,14 +285,15 @@ def run_dual_mode_generation(args):
             diffusion_model_path=args.diffusion_model,
             config=dual_config,
         )
-        # Load trained heads
+        # Load trained heads with correct dtype
         import torch
-        model.ar_head.load_state_dict(
-            torch.load(f"{args.load_from}/ar_head.pt", map_location=model.device)
-        )
-        model.diffusion_head.load_state_dict(
-            torch.load(f"{args.load_from}/diffusion_head.pt", map_location=model.device)
-        )
+        ar_head_state = torch.load(f"{args.load_from}/ar_head.pt", map_location=model.device)
+        diffusion_head_state = torch.load(f"{args.load_from}/diffusion_head.pt", map_location=model.device)
+        # Cast to model dtype if needed
+        ar_head_state = {k: v.to(model.dtype) for k, v in ar_head_state.items()}
+        diffusion_head_state = {k: v.to(model.dtype) for k, v in diffusion_head_state.items()}
+        model.ar_head.load_state_dict(ar_head_state)
+        model.diffusion_head.load_state_dict(diffusion_head_state)
         print("Loaded trained heads from checkpoint!")
     else:
         model = DualModeGenerationModel(

@@ -288,8 +288,8 @@ class DualModeGenerationModel(nn.Module):
         if hasattr(self.backbone, 'lm_head'):
             ar_state_dict = self.backbone.lm_head.state_dict()
             self.ar_head.lm_head.load_state_dict(ar_state_dict)
-        # Move ar_head to correct device
-        self.ar_head = self.ar_head.to(self.device)
+        # Move ar_head to correct device and dtype
+        self.ar_head = self.ar_head.to(self.device).to(self.dtype)
 
         # Use pad_token_id as mask token (valid token within vocabulary)
         pad_token_id = self.tokenizer.pad_token_id or 0
@@ -300,8 +300,8 @@ class DualModeGenerationModel(nn.Module):
             use_continuous_noise=False,
             pad_token_id=pad_token_id
         )
-        # Move diffusion_head to correct device
-        self.diffusion_head = self.diffusion_head.to(self.device)
+        # Move diffusion_head to correct device and dtype
+        self.diffusion_head = self.diffusion_head.to(self.device).to(self.dtype)
         print("DualModeGenerationModel initialized")
 
     def generate(
