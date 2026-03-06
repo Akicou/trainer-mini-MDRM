@@ -88,7 +88,8 @@ class AutoRegressiveHead(nn.Module):
             # Get logits for next token
             # outputs.hidden_states is a tuple - use last element for final layer
             hidden_states = outputs.hidden_states[-1]  # Last layer
-            logits = self.lm_head(hidden_states[:, -1:, :])
+            logits = self.lm_head(hidden_states[:, -1:, :])  # [batch, 1, vocab]
+            logits = logits.squeeze(1)  # [batch, vocab]
 
             # Apply temperature
             logits = logits / temperature
